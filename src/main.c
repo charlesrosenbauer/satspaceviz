@@ -54,11 +54,11 @@ Vec3 absVec(Vec3 a){
 	return a;
 }
 
-Vec3 matmul(Vec3 a, Mat3 m){
+Vec3 matMul(Vec3 a, Mat3 m){
 	Vec3 ret;
-	ret.x = (a.x * m.x.x) + (a.y * m.y.x) + (a.z * m.z.x);
-	ret.y = (a.x * m.x.y) + (a.y * m.y.y) + (a.z * m.z.y);
-	ret.z = (a.x * m.x.z) + (a.y * m.y.z) + (a.z * m.z.z);
+	ret.x = (a.x * m.x.x) + (a.y * m.x.y) + (a.z * m.x.z);
+	ret.y = (a.x * m.y.x) + (a.y * m.y.y) + (a.z * m.y.z);
+	ret.z = (a.x * m.z.x) + (a.y * m.z.y) + (a.z * m.z.z);
 	return ret;
 }
 
@@ -68,14 +68,13 @@ Vec3 matmul(Vec3 a, Mat3 m){
 Mat3 rotX(float x){
 	Mat3 ret;
 	ret.x = (Vec3){      1,      0,       0};
-	ret.y = (Vec3){      0,  cos(x),  sin(x)};
-	ret.z = (Vec3){      0, -sin(x),  cos(x)};
+	ret.y = (Vec3){      0,  cos(x), -sin(x)};
+	ret.z = (Vec3){      0,  sin(x),  cos(x)};
 	return ret;
 }
 
 Mat3 rotY(float y){
 	Mat3 ret;
-	// transpose
 	ret.x = (Vec3){ cos(y),      0,  sin(y)};
 	ret.y = (Vec3){      0,      1,       0};
 	ret.z = (Vec3){-sin(y),      0,  cos(y)};
@@ -84,7 +83,6 @@ Mat3 rotY(float y){
 
 Mat3 rotZ(float z){
 	Mat3 ret;
-	// transpose
 	ret.x = (Vec3){ cos(z), -sin(z),       0};
 	ret.y = (Vec3){ sin(z),  cos(z),       0};
 	ret.z = (Vec3){      0,       0,       0};
@@ -179,6 +177,8 @@ float getScale(Vec3* ps, Vec3* center, int size){
 }
 
 
+uint32_t spark = 0xffffff;
+
 void draw(uint32_t* pix, Vec3* ps, int size){
 	Vec3 camera = (Vec3){0, 0, 1};
 
@@ -196,13 +196,21 @@ void draw(uint32_t* pix, Vec3* ps, int size){
 }
 
 
-void drawColors(uint32_t* pix, uint32_t* cs, Vec3* ps, int size){
+void drawColors(uint32_t* pix, uint32_t* cs, Vec3* ps, int size, int rx, int ry, int rz){
 	Vec3 camera = (Vec3){0, 0, 1};
+	
+	Mat3 mx = rotX(rx * 0.1);
+	Mat3 my = rotY(ry * 0.1);
+	Mat3 mz = rotZ(rz * 0.1);
 
 	Vec3 center;
 	float scale = 0.5 / getScale(ps, &center, size);
 	for(int i = 0; i < size; i++){
 		Vec3 p =  mulVec(subVec(ps[i], center), scale);
+		p      =  matMul(p, mx);
+		p      =  matMul(p, my);
+		p      =  matMul(p, mz);
+		
 		p      =  subVec(p, camera);
 		p.x   /=  p.z;
 		p.y   /=  p.z;
@@ -272,14 +280,22 @@ void drawLine(uint32_t* ps, int x0, int y0, int x1, int y1, uint32_t color){
 }
 
 
-void drawGraph(Graph* g, uint32_t* pix, uint32_t* cs, Vec3* ps, int size){
+void drawGraph(Graph* g, uint32_t* pix, uint32_t* cs, Vec3* ps, int size, int rx, int ry, int rz){
 	Vec3 camera = (Vec3){0, 0, 1};
+		
+	Mat3 mx = rotX(rx * 0.1);
+	Mat3 my = rotY(ry * 0.1);
+	Mat3 mz = rotZ(rz * 0.1);
 	
 	Vec3 center;
 	float scale = 0.5 / getScale(ps, &center, size);
 	Vec3* xs = alloca(sizeof(Vec3) * size);
 	for(int i = 0; i < size; i++){
 		Vec3 p =  mulVec(subVec(ps[i], center), scale);
+		p      =  matMul(p, mx);
+		p      =  matMul(p, my);
+		p      =  matMul(p, mz);
+		
 		p      =  subVec(p, camera);
 		p.x   /=  p.z;
 		p.y   /=  p.z;
@@ -306,7 +322,7 @@ void drawGraph(Graph* g, uint32_t* pix, uint32_t* cs, Vec3* ps, int size){
 		int y  = (xs[i].y * 384) + 384;
 		if((x >= 1) && (x < 767) && (y >= 1) && (y < 767)){
 			pix[(y * 768) + x] = cs[i];
-			if(cs[i] == 0xffffff){
+			if(cs[i] == spark){
 				y--;
 				pix[(y * 768) + x-1] = cs[i];
 				pix[(y * 768) + x  ] = cs[i];
@@ -375,6 +391,62 @@ float move(Graph* g, Vec3* ps, float t, float r, int size){
 
 
 
+void updateColorWave(uint32_t* cs, int wave, int size){
+	for(int i = 0; i < size; i++){
+		int j = (wave + i) % size;
+		if(j < 32){
+			cs[i] = spark;
+		}else{
+			cs[i] = 0xff0000 + ((i / 4) * 256);
+		}
+	}
+}
+
+
+void updateColorFlow(Graph* g, uint32_t* cs, int size, int particles){
+	int bitlen   = (size / 64) + ((size % 64) != 0);
+
+	uint64_t* fs = alloca(sizeof(uint64_t) * bitlen);
+	for(int i = 0; i < bitlen; i++) fs[i] = 0;
+	
+	int fill  = 0;
+	for(int i = 0; i < size; i++){
+		if(cs[i] == spark){
+			int ix = rng() & (size-1);
+			for(int j = 0; j < size; j++){
+				int n = (i * size) + ix;
+				if(g->dist[n] > 0.001){
+					fs[ix / 64] |= 1l << (ix % 64);
+					j  = size;
+					fill++;
+				}else{
+					ix = (ix+1 >= size)? 0 : ix+1;
+				}
+			}
+		}
+	}
+	
+	for(int i = 0; i < size; i++) cs[i] = 0xff0000 + ((i / 4) * 256);
+	
+	int count = 0;
+	for(int i = 0; i < bitlen; i++){
+		if(fs[i]){
+			for(int j = 0; j < 64; j++){
+				if(fs[i] & (1l << j)){
+					cs[(i*64)+j] = spark;
+					count++;
+				}
+			}
+		}
+	}
+	
+	if(count < particles){
+		for(int i = count; i < particles; i++){
+			cs[rng() & (size-1)] = spark;
+		}
+	}
+}
+
 
 
 
@@ -392,7 +464,7 @@ int main(){
 	
 	uint32_t* pix = screen->pixels;
 	
-	Model m = makeModel(18, 6);
+	Model m = makeModel(32, 10);
 	printModel(m);
 	
 
@@ -400,13 +472,17 @@ int main(){
 	uint32_t cs[1024];
 	for(int i = 0; i < 1024; i++) cs[i] = 0xff0000 + ((i / 4) * 256);
 	
+	
+	
+	
+	
 	Graph g = makeGraph(1024);
 	
 	for(int i = 0; i < 1024; i++){
 		for(int j = 0; j < m.size; j++){
 			uint64_t x = i;
 			uint64_t y = next(x, m.cs[j]) % 1024;
-			setGDist(&g, x, y, 1.0);
+			setGDist(&g, x, y, 0.3);
 		}
 	}
 	
@@ -414,32 +490,43 @@ int main(){
 	initialPos(points, &g);
 	draw(pix, points, 1024);
 	
-	float anneal = 0.01;
+	float anneal = 0.05;
 	int cont = 1;
 	int wave = 0;
+	
+	int rotX = 0;
+	int rotY = 0;
+	int rotZ = 0;
+	
+	const Uint8* currentKeyStates = SDL_GetKeyboardState( NULL );
+	
 	while(cont){
 		SDL_FillRect(screen, 0, 0);
 		
-		for(int i = 0; i < 1024; i++){
-			int j = (wave + i) % 1024;
-			if(j < 32){
-				cs[i] = 0xffffff;
-			}else{
-				cs[i] = 0xff0000 + ((i / 4) * 256);
-			}
-		}
+		
 	
 		SDL_Event e;
 		while(SDL_PollEvent(&e)){
 			if(e.type == SDL_QUIT) cont = 0;
 		}
 		
-		float pot = move(&g, points, anneal, -0.01, 1024);
+		if(currentKeyStates[ SDL_SCANCODE_W ]) rotZ++;
+		if(currentKeyStates[ SDL_SCANCODE_S ]) rotZ--;
+		if(currentKeyStates[ SDL_SCANCODE_Q ]) rotX++;
+		if(currentKeyStates[ SDL_SCANCODE_E ]) rotX--;
+		if(currentKeyStates[ SDL_SCANCODE_A ]) rotY++;
+		if(currentKeyStates[ SDL_SCANCODE_D ]) rotY--;
+		if(currentKeyStates[ SDL_SCANCODE_L ]){ rotX = 0; rotY = 0; rotZ = 0; }
+		
+		
+		float pot = move(&g, points, anneal, -0.05, 1024);
 		printf("%f\n", pot);
-		drawGraph(&g, pix, cs, points, 1024);
+		drawGraph(&g, pix, cs, points, 1024, rotX, rotY, rotZ);
 		
 		SDL_UpdateWindowSurface( w );
-		SDL_Delay(16);
+		SDL_Delay(10);
+		
+		updateColorFlow(&g, cs, 1024, 64);
 		
 		wave += 4;
 	}

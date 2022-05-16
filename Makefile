@@ -1,5 +1,5 @@
 all:
-	clang -O3 -lm -lSDL2 src/*.c -o viz
+	clang -O3 -lm -lpthread -lSDL2 src/*.c -o viz
 
 debug:
-	clang -g -Og -lm -lSDL2 src/*.c -o dviz
+	clang -g -Og -lpthread -lm -lSDL2 src/*.c -o dviz
