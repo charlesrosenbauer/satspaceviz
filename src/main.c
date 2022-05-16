@@ -20,7 +20,9 @@ float distSqr(Vec3 a, Vec3 b){
 	float dx = a.x - b.x;
 	float dy = a.y - b.y;
 	float dz = a.z - b.z;
-	return (dx * dx) + (dy * dy) + (dz * dz);
+	float d  = (dx * dx) + (dy * dy) + (dz * dz);
+	if(d < 0.00001) return 0.0001;
+	return d;
 }
 
 Vec3 addVec(Vec3 a, Vec3 b){
@@ -193,10 +195,29 @@ void draw(uint32_t* pix, Vec3* ps, int size){
 }
 
 
-float move(Graph* g, Vec3* ps, float t, int size){
+void drawColors(uint32_t* pix, uint32_t* cs, Vec3* ps, int size){
+	Vec3 camera = (Vec3){0, 0, 1};
+
+	Vec3 center;
+	float scale = 0.5 / getScale(ps, &center, size);
+	for(int i = 0; i < size; i++){
+		Vec3 p =  mulVec(subVec(ps[i], center), scale);
+		p      =  subVec(p, camera);
+		p.x   /=  p.z;
+		p.y   /=  p.z;
+		int x  = (p.x * 384) + 384;
+		int y  = (p.y * 384) + 384;
+		if((x >= 0) && (x < 768) && (y >= 0) && (y < 768)) pix[(y * 768) + x] = cs[i];
+	}
+}
+
+
+float move(Graph* g, Vec3* ps, float t, float r, int size){
 	float pot = 0;
 	Vec3*  ds = alloca(sizeof(Vec3) * size);
 	for(int i = 0; i < size; i++) ds[i] = (Vec3){0, 0, 0};
+	
+	float mindist = 0.0000001;
 	
 	for(int i = 0; i < size; i++){
 		for(int j = i+1; j < size; j++){
@@ -205,7 +226,15 @@ float move(Graph* g, Vec3* ps, float t, int size){
 			if(s > 0.0001){
 				float dist = sqrt(distSqr(ps[i], ps[j]));
 				pot       += fabs(dist - s);
-				Vec3  diff = mulVec(subVec(ps[i], ps[j]), dist);
+				Vec3  diff = mulVec(subVec(ps[i], ps[j]), (dist-s));
+				ds[i]      = addVec(ds[i], mulVec(diff, -t));
+				ds[j]      = addVec(ds[j], mulVec(diff,  t));
+			}else{
+				float dsqr = distSqr(ps[i], ps[j]);
+				float    f = -r / dsqr;
+				f          = (fabs(f) > mindist)? ((f < 0)? -mindist : mindist) : f;
+				pot       += f;
+				Vec3  diff = mulVec(subVec(ps[i], ps[j]), f);
 				ds[i]      = addVec(ds[i], mulVec(diff, -t));
 				ds[j]      = addVec(ds[j], mulVec(diff,  t));
 			}
@@ -225,60 +254,25 @@ float move(Graph* g, Vec3* ps, float t, int size){
 
 int main(){
 	SDL_Init(SDL_INIT_EVERYTHING);
-	SDL_Surface* screen = SDL_SetVideoMode(512, 512, 32, 0);
+	SDL_Surface* screen = SDL_SetVideoMode(768, 768, 32, 0);
 	
 	uint32_t* pix = screen->pixels;
 	
-	Model m = makeModel(64, 18);
-	//printModel(m);
+	Model m = makeModel(18, 6);
+	printModel(m);
 	
-	{
-		uint64_t x = 0;
-		Clause   c = (Clause){1, 2, 4};
-		for(int  i = 0; i < 64; i++){
-			uint64_t y = next(x, c);
-			x = (x == y)? y+1 : y;
-			if(x != y) printf("%i %08lx\n", i, y);
-		}
-	}
-	/*
-	for(int t = 0; t < 64; t++){
-		SDL_FillRect(screen, 0, 0);
-	
-		SDL_Event e;
-		while(SDL_PollEvent(&e)){
-			if(e.type == SDL_QUIT) t = 64;
-		}
-	
-		m.size = t;
-		for(int i = 0; i < 262144; i++){
-			uint64_t x = i;
-			int   pass = 1;
-			for(int j = 0; j < m.size; j++){
-				if(!isMatch(x, m.cs[j])){
-					pass = 0;
-					break;
-				}
-			}
-			if(pass){
-				pix[i] = 0xffffff;
-			}
-		}
-		SDL_Flip(screen);
-		SDL_Delay(100);
-	}*/
-	
-	/*
+
 	Vec3 points[1024];
+	uint32_t cs[1024];
+	for(int i = 0; i < 1024; i++) cs[i] = 0xff0000 + ((i / 4) * 256);
+	
 	Graph g = makeGraph(1024);
 	
 	for(int i = 0; i < 1024; i++){
-		for(int j = 0; j < 5; j++){
-			if(i) setGDist(&g, i-1, i, 1.0);
-			int a = i - (rng() % 16);
-			if(a > 0){
-				setGDist(&g, a, i, 1.0);
-			}
+		for(int j = 0; j < m.size; j++){
+			uint64_t x = i;
+			uint64_t y = next(x, m.cs[j]) % 1024;
+			setGDist(&g, x, y, 1.0);
 		}
 	}
 	
@@ -286,30 +280,34 @@ int main(){
 	initialPos(points, &g);
 	draw(pix, points, 1024);
 	
-	float anneal = 0.1;
+	float anneal = 0.01;
 	int cont = 1;
+	int wave = 0;
 	while(cont){
 		SDL_FillRect(screen, 0, 0);
+		
+		for(int i = 0; i < 1024; i++){
+			int j = (wave + i) % 1024;
+			if(j < 32){
+				cs[i] = 0xffffff;
+			}else{
+				cs[i] = 0xff0000 + ((i / 4) * 256);
+			}
+		}
 	
 		SDL_Event e;
 		while(SDL_PollEvent(&e)){
 			if(e.type == SDL_QUIT) cont = 0;
 		}
 		
-		if(anneal > 0.16){
-			anneal -= 0.005;
-		}else if(anneal > 0.10){
-			anneal -= 0.003;
-		}else if(anneal > 0.01){
-			anneal -= 0.001;
-		}
-		
-		float pot = move(&g, points, anneal, 1024);
+		float pot = move(&g, points, anneal, -0.01, 1024);
 		printf("%f\n", pot);
-		draw(pix, points, 1024);
+		drawColors(pix, cs, points, 1024);
 		
 		SDL_Flip(screen);
 		SDL_Delay(16);
+		
+		wave += 4;
 	}
-	SDL_Quit();*/
+	SDL_Quit();
 }

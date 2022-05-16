@@ -36,12 +36,17 @@ Model    makeModel(int size, int bit){
 	size = (size > 512)? 512 : size;
 	for(int i = 0; i < size; i++){
 		int a, b, c;
-		a = rng() % (bit * 2);
-		b = rng() % (bit * 2);
-		c = rng() % (bit * 2);
-		a = (a >= bit)? a-(bit+bit) : a+1;
-		b = (b >= bit)? b-(bit+bit) : b+1;
-		c = (c >= bit)? c-(bit+bit) : c+1;
+		a = (rng() % bit) + 1;
+		b = (rng() % bit) + 1;
+		c = (rng() % bit) + 1;
+		if(a < b){int t = a; a = b; b = t;}
+		if(b < c){int t = b; b = c; c = t;}
+		if(a < b){int t = a; a = b; b = t;}
+		
+		int s = rng();
+		a = (s & 1)? -a : a;
+		b = (s & 2)? -b : b;
+		c = (s & 3)? -c : c;
 		
 		ret.cs[i] = (Clause){a, b, c};
 	}
@@ -91,19 +96,17 @@ uint64_t maskIter(uint64_t x, uint64_t m){
 uint64_t next(uint64_t x, Clause c){
 	if(isMatch(x, c)) return x;
 	
-	uint64_t m = clauseMask(c);
-	uint64_t v = clauseVal (c);
-	
-	uint64_t y = x & m;
-	for(int i = 0; i < 8; i++){
-		y = maskIter(y, m);
-		if((~(y ^ v) & m)) break;
+	uint64_t b = 1l << (abs(c.c)-1);
+	uint64_t m = ~((b + b) - 1);
+	if(c.c < 0){
+		x &= m;
+		x += b + b;
+	}else{
+		x &= m;
+		x |= b;
 	}
 	
-	
-	//printf("%08lx, %08lx, %08lx\n", m, v, d);
-	
-	return y;
+	return x;
 }
 
 
