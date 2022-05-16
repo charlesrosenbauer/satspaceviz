@@ -238,6 +238,105 @@ void drawColors(uint32_t* pix, uint32_t* cs, Vec3* ps, int size){
 	}
 }
 
+void drawLine(uint32_t* ps, int x0, int y0, int x1, int y1, uint32_t color){
+	int dx  = x1 - x0;
+	int dy  = y1 - y0;
+	float m = ((float)abs(dy)) / ((float)dx);
+	
+	int   x = x1;
+	int   y = y1;
+	float c = 0.0;
+	if(abs(dx) > abs(dy)){	// from x1 -> x0
+		int  ix = (dx < 0)? -1 : 1;
+		float c = 0.0;
+		if((dx ^ dy) > 0) m = -m;
+		for(int i = 0; i < abs(dx); i++){
+			x -= ix;
+			c -= m;
+			y  = y1 - c;
+			int p = (y * 768) + x;
+			if(!((x < 0) || (x > 767) || (y < 0) || (y > 767))) ps[p] += (color >> 5) & 0x70707;
+		}
+	}else{					// from y1 -> y0
+		m = 1.0 / m;
+		int iy = (dy < 0)? -1 : 1;
+		for(int i = 0; i < abs(dy); i++){
+			y -= iy;
+			c += m;
+			x  = x1 - c;
+			int p = (y * 768) + x;
+			if(!((x < 0) || (x > 767) || (y < 0) || (y > 767))) ps[p] += (color >> 5) & 0x70707;
+		}
+	}
+}
+
+
+void drawGraph(Graph* g, uint32_t* pix, uint32_t* cs, Vec3* ps, int size){
+	Vec3 camera = (Vec3){0, 0, 1};
+	
+	Vec3 center;
+	float scale = 0.5 / getScale(ps, &center, size);
+	Vec3* xs = alloca(sizeof(Vec3) * size);
+	for(int i = 0; i < size; i++){
+		Vec3 p =  mulVec(subVec(ps[i], center), scale);
+		p      =  subVec(p, camera);
+		p.x   /=  p.z;
+		p.y   /=  p.z;
+		xs[i]  =  p;
+	}
+	
+	for(int i = 0; i < g->size; i++){
+		for(int j = i+1; j < g->size; j++){
+			int ix = (i * g->size) + j;
+			if(g->dist[ix] > 0.001){
+				int x0 = (xs[i].x * 384) + 384;
+				int y0 = (xs[i].y * 384) + 384;
+				int x1 = (xs[j].x * 384) + 384;
+				int y1 = (xs[j].y * 384) + 384;
+			
+				drawLine(pix, x0, y0, x1, y1, cs[i]);
+			}
+		}
+	}
+
+	
+	for(int i = 0; i < size; i++){
+		int x  = (xs[i].x * 384) + 384;
+		int y  = (xs[i].y * 384) + 384;
+		if((x >= 1) && (x < 767) && (y >= 1) && (y < 767)){
+			pix[(y * 768) + x] = cs[i];
+			if(cs[i] == 0xffffff){
+				y--;
+				pix[(y * 768) + x-1] = cs[i];
+				pix[(y * 768) + x  ] = cs[i];
+				pix[(y * 768) + x+1] = cs[i];
+				
+				y++;
+				pix[(y * 768) + x-1] = cs[i];
+				pix[(y * 768) + x+1] = cs[i];
+				
+				y++;
+				pix[(y * 768) + x-1] = cs[i];
+				pix[(y * 768) + x  ] = cs[i];
+				pix[(y * 768) + x+1] = cs[i];
+			}else{
+				y--;
+				pix[(y * 768) + x  ] = cs[i];
+				
+				y++;
+				pix[(y * 768) + x-1] = cs[i];
+				pix[(y * 768) + x+1] = cs[i];
+				
+				y++;
+				pix[(y * 768) + x  ] = cs[i];
+			}
+		}
+	}
+}
+
+
+
+
 
 float move(Graph* g, Vec3* ps, float t, float r, int size){
 	float pot = 0;
@@ -329,7 +428,7 @@ int main(){
 		
 		float pot = move(&g, points, anneal, -0.01, 1024);
 		printf("%f\n", pot);
-		drawColors(pix, cs, points, 1024);
+		drawGraph(&g, pix, cs, points, 1024);
 		
 		SDL_Flip(screen);
 		SDL_Delay(16);
