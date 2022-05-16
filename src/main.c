@@ -207,7 +207,34 @@ void drawColors(uint32_t* pix, uint32_t* cs, Vec3* ps, int size){
 		p.y   /=  p.z;
 		int x  = (p.x * 384) + 384;
 		int y  = (p.y * 384) + 384;
-		if((x >= 0) && (x < 768) && (y >= 0) && (y < 768)) pix[(y * 768) + x] = cs[i];
+		if((x >= 1) && (x < 767) && (y >= 1) && (y < 767)){
+			pix[(y * 768) + x] = cs[i];
+			if(cs[i] == 0xffffff){
+				y--;
+				pix[(y * 768) + x-1] = cs[i];
+				pix[(y * 768) + x  ] = cs[i];
+				pix[(y * 768) + x+1] = cs[i];
+				
+				y++;
+				pix[(y * 768) + x-1] = cs[i];
+				pix[(y * 768) + x+1] = cs[i];
+				
+				y++;
+				pix[(y * 768) + x-1] = cs[i];
+				pix[(y * 768) + x  ] = cs[i];
+				pix[(y * 768) + x+1] = cs[i];
+			}else{
+				y--;
+				pix[(y * 768) + x  ] = cs[i];
+				
+				y++;
+				pix[(y * 768) + x-1] = cs[i];
+				pix[(y * 768) + x+1] = cs[i];
+				
+				y++;
+				pix[(y * 768) + x  ] = cs[i];
+			}
+		}
 	}
 }
 
