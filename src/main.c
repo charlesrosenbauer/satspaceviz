@@ -1,5 +1,6 @@
-#include "SDL/SDL.h"
+#include "SDL2/SDL.h"
 
+#include "stdio.h"
 #include "stdint.h"
 #include "stdlib.h"
 #include "math.h"
@@ -380,7 +381,14 @@ float move(Graph* g, Vec3* ps, float t, float r, int size){
 
 int main(){
 	SDL_Init(SDL_INIT_EVERYTHING);
-	SDL_Surface* screen = SDL_SetVideoMode(768, 768, 32, 0);
+	
+	SDL_Window* w = SDL_CreateWindow("satspace",
+		SDL_WINDOWPOS_UNDEFINED,
+		SDL_WINDOWPOS_UNDEFINED,
+		768,
+		768,
+		SDL_WINDOW_SHOWN );
+	SDL_Surface* screen = SDL_GetWindowSurface( w );
 	
 	uint32_t* pix = screen->pixels;
 	
@@ -430,7 +438,7 @@ int main(){
 		printf("%f\n", pot);
 		drawGraph(&g, pix, cs, points, 1024);
 		
-		SDL_Flip(screen);
+		SDL_UpdateWindowSurface( w );
 		SDL_Delay(16);
 		
 		wave += 4;
