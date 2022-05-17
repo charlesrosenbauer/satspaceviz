@@ -264,7 +264,7 @@ void drawLine(uint32_t* ps, int x0, int y0, int x1, int y1, uint32_t color){
 			c -= m;
 			y  = y1 - c;
 			int p = (y * 768) + x;
-			if(!((x < 0) || (x > 767) || (y < 0) || (y > 767))) ps[p] += (color >> 5) & 0x70707;
+			if(!((x < 0) || (x > 767) || (y < 0) || (y > 767))) ps[p] += (color >> 2) & 0x3f3f3f;
 		}
 	}else{					// from y1 -> y0
 		m = 1.0 / m;
@@ -274,18 +274,18 @@ void drawLine(uint32_t* ps, int x0, int y0, int x1, int y1, uint32_t color){
 			c += m;
 			x  = x1 - c;
 			int p = (y * 768) + x;
-			if(!((x < 0) || (x > 767) || (y < 0) || (y > 767))) ps[p] += (color >> 5) & 0x70707;
+			if(!((x < 0) || (x > 767) || (y < 0) || (y > 767))) ps[p] += (color >> 2) & 0x3f3f3f;
 		}
 	}
 }
 
 
 void drawGraph(Graph* g, uint32_t* pix, uint32_t* cs, Vec3* ps, int size, int rx, int ry, int rz){
-	Vec3 camera = (Vec3){0, 0, 1};
+	Vec3 camera = (Vec3){0, 0, 0.5};
 		
-	Mat3 mx = rotX(rx * 0.1);
-	Mat3 my = rotY(ry * 0.1);
-	Mat3 mz = rotZ(rz * 0.1);
+	Mat3 mx = rotX(rx * 0.05);
+	Mat3 my = rotY(ry * 0.05);
+	Mat3 mz = rotZ(rz * 0.05);
 	
 	Vec3 center;
 	float scale = 0.5 / getScale(ps, &center, size);
@@ -464,7 +464,8 @@ int main(){
 	
 	uint32_t* pix = screen->pixels;
 	
-	Model m = makeModel(32, 10);
+	rngseed(78371598375);
+	Model m = makeModel(20, 10);
 	printModel(m);
 	
 
@@ -479,18 +480,22 @@ int main(){
 	Graph g = makeGraph(1024);
 	
 	for(int i = 0; i < 1024; i++){
+		uint64_t max = 0;
 		for(int j = 0; j < m.size; j++){
 			uint64_t x = i;
 			uint64_t y = next(x, m.cs[j]) % 1024;
-			setGDist(&g, x, y, 0.3);
+			max = (max > y)? max : y;
+			//setGDist(&g, x, y, 0.05);
 		}
+		setGDist(&g, i, max, 0.05);
 	}
 	
-	listGStruct(&g);
+	//listGStruct(&g);
 	initialPos(points, &g);
 	draw(pix, points, 1024);
 	
-	float anneal = 0.05;
+	float anneal =  0.008;
+	float repel  = -0.8;
 	int cont = 1;
 	int wave = 0;
 	
@@ -519,7 +524,7 @@ int main(){
 		if(currentKeyStates[ SDL_SCANCODE_L ]){ rotX = 0; rotY = 0; rotZ = 0; }
 		
 		
-		float pot = move(&g, points, anneal, -0.05, 1024);
+		float pot = move(&g, points, anneal, repel, 1024);
 		printf("%f\n", pot);
 		drawGraph(&g, pix, cs, points, 1024, rotX, rotY, rotZ);
 		

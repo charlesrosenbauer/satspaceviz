@@ -15,6 +15,7 @@ typedef struct{
 
 uint64_t rng       ();
 float    randFlt   ();
+uint64_t rngseed   (uint64_t);
 
 Model    makeModel (int, int);
 void	 printModel(Model);

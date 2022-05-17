@@ -16,6 +16,13 @@ uint64_t rng(){
 	return rstate ^ 135891753891;
 }
 
+uint64_t rngseed(uint64_t x){
+	rstate += x;
+	rng();
+	rstate -= x;
+	return rng();
+}
+
 float randFlt(){
 	float  n = rng() % 1048576;
 	return n / 1048576;
